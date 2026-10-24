@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Electrical Panel Tracker",
+  "schemaVersion": 1,
+  "description": "Interactive electrical panel tracker synced to GitHub."
+}
+</script>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Panel Tracker">
+<title>Panel Tracker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  background: #ebebeb;
+  color: #111;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.topbar {
+  background: #111;
+  color: white;
+  padding: 13px 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.topbar h1 { font-size: 1rem; font-weight: 900; letter-spacing: -0.01em; text-transform: uppercase; }
+.topbar .main-tag { font-size: 0.7rem; font-weight: 600; color: #888; letter-spacing: 0.08em; text-transform: uppercase; }
+.topbar .ts { font-size: 0.68rem; color: #666; margin-left: auto; }
+.sync-indicator {
+  font-size: 0.62rem; font-weight: 600; padding: 2px 7px;
+  border-radius: 10px; letter-spacing: 0.04em;
+}
+.sync-ok   { background: #1a3a26; color: #68d391; }
+.sync-busy { background: #3d3000; color: #f6e05e; }
+.sync-err  { background: #3d1515; color: #fc8181; }
+
+/* ── Tabs ── */
+.tabs { display: flex; background: white; border-bottom: 2px solid #111; padding: 0 20px; gap: 2px; }
+.tab {
+  padding: 9px 16px; font-size: 0.78rem; font-weight: 600; color: #888;
+  cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;
+  letter-spacing: 0.02em; transition: color 0.1s;
+}
+.tab.active { color: #111; border-bottom-color: #111; }
+.tab:hover:not(.active) { color: #444; }
+
+/* ── Tab panes ── */
+.tab-content { display: none; padding: 18px 20px; }
+.tab-content.active { display: block; }
+
+/* ── Stats ── */
+.stats-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat { background: white; border-radius: 8px; padding: 10px 14px; border: 1.5px solid #ddd; flex: 1; min-width: 70px; }
+.stat-val { font-size: 1.3rem; font-weight: 900; }
+.stat-lab { font-size: 0.62rem; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
+
+/* ── PANEL SCHEMATIC ── */
+.panel-outer {
+  background: #ccc; border-radius: 10px; padding: 14px;
+  max-width: 740px; margin: 0 auto; border: 2px solid #aaa;
+}
+.panel-nameplate {
+  background: #111; color: #ccc; text-align: center; border-radius: 5px;
+  padding: 6px; margin-bottom: 10px; font-size: 0.68rem;
+  font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.panel-main-breaker {
+  background: white; border: 2px solid #111; border-radius: 5px;
+  color: #111; text-align: center; padding: 6px; margin-bottom: 10px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: 22px 1fr 12px 1fr 22px;
+  gap: 2px; align-items: start;
+}
+.pos-num {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 48px; gap: 2px; color: #888;
+}
+.pos-num.live { color: #111; }
+.pn-n { font-size: 0.62rem; font-weight: 700; font-family: 'Inter', monospace; line-height: 1; }
+.pn-ref { font-size: 0.5rem; font-weight: 600; color: #555; line-height: 1; text-align: center; }
+
+/* ── Breaker cells ── */
+.breaker {
+  border-radius: 4px; padding: 5px 7px; cursor: pointer;
+  height: 48px; display: flex; flex-direction: column;
+  justify-content: center; overflow: hidden;
+  border: 1.5px solid #bbb; transition: opacity 0.1s; position: relative;
+}
+.breaker:hover { opacity: 0.82; }
+.breaker.left  { border-left:  4px solid #bbb; }
+.breaker.right { border-right: 4px solid #bbb; }
+.breaker.empty {
+  background: #d4d4d4; border-color: #bbb; border-style: dashed; cursor: default;
+}
+.breaker.empty.left  { border-left:  2px dashed #bbb; }
+.breaker.empty.right { border-right: 2px dashed #bbb; }
+.breaker.empty:hover { opacity: 1; }
+.breaker.confirmed { background: white; border-color: #111; }
+.breaker.confirmed.left  { border-left:  4px solid #111; }
+.breaker.confirmed.right { border-right: 4px solid #111; }
+.breaker.unconfirmed { background: white; border-color: #666; }
+.breaker.unconfirmed.left  { border-left:  3px solid #666; }
+.breaker.unconfirmed.right { border-right: 3px solid #666; }
+.breaker.unknown {
+  background: repeating-linear-gradient(135deg,#fff 0,#fff 4px,#ddd 4px,#ddd 7px);
+  border-color: #999; border-style: dashed;
+}
+.breaker.unknown.left  { border-left:  2px dashed #999; }
+.breaker.unknown.right { border-right: 2px dashed #999; }
+.breaker.double-top    { border-radius: 4px 4px 0 0; height: 50px; border-bottom: 1px dashed rgba(0,0,0,0.15); }
+.breaker.double-bottom { border-radius: 0 0 4px 4px; height: 50px; border-top: none; }
+.b-zone { font-size: 0.7rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.b-sub  { font-size: 0.58rem; font-weight: 500; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; margin-top: 1px; }
+.b-zone.dim { color: #aaa; font-weight: 400; font-style: italic; font-size: 0.6rem; }
+.b-zone.mys { color: #888; }
+.b-sub.v2   { color: #666; font-size: 0.55rem; font-weight: 600; }
+
+/* Legend */
+.panel-legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.legend-item  { display: flex; align-items: center; gap: 5px; font-size: 0.68rem; color: #666; font-weight: 500; }
+.legend-dot   { width: 10px; height: 10px; border-radius: 2px; }
+
+/* ── LIST VIEW ── */
+.toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+select, input[type=text] {
+  padding: 6px 10px; border: 1.5px solid #ccc; border-radius: 6px;
+  font-size: 0.8rem; background: white; color: #111; font-family: inherit;
+}
+.btn { padding: 7px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.1s; white-space: nowrap; font-family: inherit; }
+.btn-primary { background: #111; color: white; }
+.btn-primary:hover { background: #333; }
+.btn-sm { padding: 3px 9px; font-size: 0.7rem; border-radius: 5px; }
+.btn-outline { background: white; border: 1.5px solid #ccc; color: #444; }
+.btn-outline:hover { background: #f5f5f5; }
+.btn-danger { background: white; border: 1.5px solid #e53e3e; color: #e53e3e; }
+
+.card { background: white; border-radius: 8px; border: 1.5px solid #ddd; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 700px; }
+thead { background: #f5f5f5; }
+th { padding: 8px 10px; text-align: left; font-size: 0.63rem; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.07em; border-bottom: 1.5px solid #ddd; white-space: nowrap; }
+td { padding: 10px 10px; font-size: 0.8rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr.row-unknown td { background: #fafafa; }
+tr.row-tbd td { background: #fafafa; }
+
+.pos-badge { display: inline-flex; align-items: center; justify-content: center; background: #111; color: white; border-radius: 5px; padding: 2px 8px; font-weight: 700; font-size: 0.82rem; min-width: 32px; font-family: 'Inter', monospace; }
+.pos-badge.double { background: #555; }
+.pos-badge.tbd { background: #bbb; }
+.badge { display: inline-block; border-radius: 4px; padding: 1px 7px; font-size: 0.65rem; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.badge-confirmed   { background: #111; color: white; }
+.badge-unconfirmed { background: white; color: #555; border-color: #999; }
+.badge-needscheck  { background: #f5f5f5; color: #999; border-color: #ddd; border-style: dashed; }
+
+.label-cell { cursor: pointer; font-weight: 500; }
+.label-cell:hover { text-decoration: underline; }
+.empty-val { color: #bbb; font-style: italic; cursor: pointer; font-size: 0.75rem; }
+.empty-val:hover { color: #111; }
+.area-pill { display: inline-block; background: #f0f0f0; color: #333; border-radius: 20px; padding: 2px 10px; font-size: 0.7rem; font-weight: 600; cursor: pointer; border: 1px solid #ddd; }
+.area-pill:hover { background: #e0e0e0; }
+.loc-count { font-size: 0.7rem; background: #f0f0f0; color: #555; border-radius: 20px; padding: 2px 9px; font-weight: 500; white-space: nowrap; }
+.loc-count.empty { color: #bbb; }
+
+.circuit-row { cursor: pointer; transition: background 0.1s; }
+.circuit-row:hover td { background: #fafafa; }
+.circuit-row.expanded td { background: #f5f5f5 !important; border-bottom: none; }
+.detail-row td { padding: 0; border-bottom: 2px solid #ddd !important; }
+.detail-panel { padding: 12px 14px 14px 18px; background: #f8f8f8; }
+.detail-notes { font-size: 0.72rem; color: #777; background: white; border-left: 3px solid #ddd; border-radius: 0 5px 5px 0; padding: 6px 10px; margin-bottom: 10px; line-height: 1.5; }
+.loc-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.loc-empty { font-size: 0.75rem; color: #bbb; font-style: italic; padding: 2px 0 6px; }
+.loc-item { display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #e8e8e8; border-radius: 6px; padding: 5px 9px; font-size: 0.8rem; }
+.loc-icon { font-size: 0.9rem; flex-shrink: 0; }
+.loc-desc { flex: 1; }
+.loc-del { color: #bbb; cursor: pointer; border: none; background: none; font-size: 0.72rem; padding: 0 4px; flex-shrink: 0; }
+.loc-del:hover { color: #e53e3e; }
+.quick-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.qa-sel { padding: 5px 7px; border: 1.5px solid #ccc; border-radius: 6px; font-size: 0.78rem; background: white; flex-shrink: 0; font-family: inherit; }
+.qa-input { flex: 1; min-width: 160px; padding: 5px 9px; border: 1.5px solid #ccc; border-radius: 6px; font-size: 0.8rem; font-family: inherit; }
+.qa-input:focus { outline: none; border-color: #111; }
+
+/* ── PHOTOS ── */
+.photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.photo-card { background: white; border-radius: 8px; border: 1.5px solid #ddd; overflow: hidden; }
+.photo-card-header { background: #111; color: white; padding: 9px 13px; font-size: 0.78rem; font-weight: 600; }
+.photo-body { padding: 12px; }
+.photo-img-wrap { width: 100%; aspect-ratio: 3/4; background: #f5f5f5; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; cursor: pointer; }
+.photo-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.photo-placeholder { color: #bbb; text-align: center; font-size: 0.75rem; padding: 20px; }
+.photo-placeholder .icon { font-size: 2rem; margin-bottom: 6px; }
+.photo-upload-btn { display: block; width: 100%; padding: 7px; background: #f5f5f5; border: 1.5px dashed #ccc; color: #555; border-radius: 6px; font-size: 0.74rem; cursor: pointer; text-align: center; font-family: inherit; }
+.photo-upload-btn:hover { background: #eee; }
+.photo-remove-btn { display: block; width: 100%; padding: 5px; background: white; border: 1.5px solid #ddd; color: #999; border-radius: 6px; font-size: 0.68rem; cursor: pointer; text-align: center; margin-top: 5px; font-family: inherit; }
+.photo-remove-btn:hover { color: #e53e3e; border-color: #e53e3e; }
+.photo-note { font-size: 0.65rem; color: #aaa; margin-top: 7px; text-align: center; line-height: 1.4; }
+
+/* Lightbox */
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 300; justify-content: center; align-items: center; padding: 20px; }
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
+.lightbox-close { position: absolute; top: 16px; right: 20px; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; }
+
+/* ── Modals / Overlays ── */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; justify-content: center; align-items: flex-start; padding-top: 40px; }
+.overlay.show { display: flex; }
+.modal { background: white; border-radius: 12px; padding: 22px; width: 94%; max-width: 400px; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.2); }
+.modal h2 { font-size: 0.88rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #111; }
+.field { margin-top: 10px; }
+.modal label { display: block; font-size: 0.68rem; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+.modal label.dim { color: #aaa; font-size: 0.62rem; }
+.modal input, .modal select, .modal textarea { width: 100%; padding: 7px 10px; border: 1.5px solid #ccc; border-radius: 7px; font-size: 0.85rem; font-family: inherit; background: white; color: #111; }
+.modal input:focus, .modal select:focus, .modal textarea:focus { outline: none; border-color: #111; }
+.modal input.big { font-size: 1rem; font-weight: 600; padding: 9px 11px; border-color: #111; border-width: 2px; }
+.modal textarea { min-height: 55px; resize: vertical; }
+.modal-divider { border: none; border-top: 1px solid #eee; margin: 14px 0 4px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.status-pills { display: flex; gap: 6px; margin-top: 4px; }
+.status-pill { flex: 1; padding: 6px 4px; text-align: center; border: 1.5px solid #ddd; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; color: #888; background: white; font-family: inherit; }
+.status-pill.active-confirmed   { background: #111; color: white; border-color: #111; }
+.status-pill.active-unconfirmed { background: white; color: #111; border-color: #111; }
+.status-pill.active-unknown     { background: #f5f5f5; color: #999; border-color: #bbb; }
+
+/* ── Token setup screen ── */
+#setupOverlay {
+  display: none; position: fixed; inset: 0;
+  background: #111; z-index: 500;
+  justify-content: center; align-items: center; padding: 24px;
+}
+#setupOverlay.show { display: flex; }
+.setup-box { background: white; border-radius: 14px; padding: 28px; width: 100%; max-width: 420px; }
+.setup-box h2 { font-size: 1.1rem; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; margin-bottom: 6px; }
+.setup-box .setup-sub { font-size: 0.78rem; color: #666; margin-bottom: 20px; line-height: 1.5; }
+.setup-box label { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+.setup-box input { width: 100%; padding: 10px 12px; border: 2px solid #111; border-radius: 8px; font-size: 0.9rem; font-family: 'Inter', monospace; margin-bottom: 14px; }
+.setup-box input:focus { outline: none; }
+.setup-error { font-size: 0.75rem; color: #e53e3e; margin-bottom: 10px; display: none; }
+
+/* Loading bar */
+#loadingBar {
+  position: fixed; top: 0; left: 0; height: 3px;
+  background: #111; width: 0%; transition: width 0.3s; z-index: 999;
+}
+</style>
+</head>
+<body>
+
+<!-- Loading bar -->
+<div id="loadingBar"></div>
+
+<!-- Token setup screen -->
+<div id="setupOverlay">
+  <div class="setup-box">
+    <h2>Panel Tracker</h2>
+    <p class="setup-sub">Enter your GitHub access token to sync your circuit data across devices. This is stored only on this device.</p>
+    <label>GitHub Access Token</label>
+    <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+    <div class="setup-error" id="setupError">Token invalid or can't reach GitHub. Check and try again.</div>
+    <button class="btn btn-primary" style="width:100%;padding:10px" onclick="setupToken()">Connect →</button>
+  </div>
+</div>
+
+<div class="topbar">
+  <h1>Panel Tracker</h1>
+  <span class="main-tag">Main · 100A</span>
+  <span class="ts">Updated: <span id="lastUpdated">–</span></span>
+  <span class="sync-indicator sync-ok" id="syncBadge" style="display:none">✓ Synced</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('panel')">Panel View</div>
+  <div class="tab" onclick="switchTab('list')">Circuit List</div>
+  <div class="tab" onclick="switchTab('photos')">Photos</div>
+</div>
+
+<!-- PANEL VIEW -->
+<div id="tab-panel" class="tab-content active">
+  <div class="panel-outer">
+    <div class="panel-nameplate">Main Panel · 100A</div>
+    <div class="panel-main-breaker">MAIN BREAKER — 100A</div>
+    <div class="panel-grid" id="panelGrid"></div>
+    <div class="panel-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#111;border:2px solid #111"></div> Confirmed</div>
+      <div class="legend-item"><div class="legend-dot" style="background:white;border:1.5px solid #666"></div> Identified</div>
+      <div class="legend-item"><div class="legend-dot" style="background:repeating-linear-gradient(135deg,#fff 0,#fff 4px,#ddd 4px,#ddd 7px);border:1px dashed #999"></div> Unknown</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#d4d4d4;border:1px dashed #bbb"></div> Open slot</div>
+    </div>
+  </div>
+  <p style="text-align:center;color:#aaa;font-size:0.66rem;margin-top:10px;font-weight:500">Tap any breaker to edit · Left = odd · Right = even</p>
+</div>
+
+<!-- LIST VIEW -->
+<div id="tab-list" class="tab-content">
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="statTotal">–</div><div class="stat-lab">Total</div></div>
+    <div class="stat"><div class="stat-val" id="statConfirmed">–</div><div class="stat-lab">Confirmed</div></div>
+    <div class="stat"><div class="stat-val" id="statUnconfirmed">–</div><div class="stat-lab">Identified</div></div>
+    <div class="stat"><div class="stat-val" id="statUnknown">–</div><div class="stat-lab">Unknown</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="openAddCircuit()">+ Add Circuit</button>
+    <select id="filterArea" onchange="renderList()"><option value="">All Areas</option></select>
+    <select id="filterStatus" onchange="renderList()">
+      <option value="">All Status</option>
+      <option value="confirmed">Confirmed</option>
+      <option value="unconfirmed">Identified</option>
+      <option value="unknown">Unknown</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search…" oninput="renderList()" style="flex:1;min-width:100px">
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Pos</th><th>Zone</th><th>Description</th><th>Type</th><th>Status</th><th>Locations</th><th>Old Ref</th><th></th></tr>
+      </thead>
+      <tbody id="circuitTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PHOTOS -->
+<div id="tab-photos" class="tab-content">
+  <p style="color:#aaa;font-size:0.78rem;margin-bottom:14px;font-weight:500">Reference photos from the old panels.</p>
+  <div class="photos-grid">
+    <div class="photo-card">
+      <div class="photo-card-header">Old Panel A</div>
+      <div class="photo-body">
+        <div class="photo-img-wrap" id="imgWrap-A" onclick="openLightbox('A')">
+          <div class="photo-placeholder" id="imgPlaceholder-A"><div class="icon">🔲</div>No photo</div>
+          <img id="imgDisplay-A" style="display:none" alt="Panel A">
+        </div>
+        <label class="photo-upload-btn">Load from device<input type="file" accept="image/*" style="display:none" onchange="loadPhoto('A',this)"></label>
+        <button class="photo-remove-btn" id="removeBtn-A" style="display:none" onclick="removePhoto('A')">Remove</button>
+        <p class="photo-note">GTE Sylvania · ~19 circuits</p>
+      </div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-card-header">Old Panel B</div>
+      <div class="photo-body">
+        <div class="photo-img-wrap" id="imgWrap-B" onclick="openLightbox('B')">
+          <div class="photo-placeholder" id="imgPlaceholder-B"><div class="icon">🔲</div>No photo</div>
+          <img id="imgDisplay-B" style="display:none" alt="Panel B">
+        </div>
+        <label class="photo-upload-btn">Load from device<input type="file" accept="image/*" style="display:none" onchange="loadPhoto('B',this)"></label>
+        <button class="photo-remove-btn" id="removeBtn-B" style="display:none" onclick="removePhoto('B')">Remove</button>
+        <p class="photo-note">Sub-panel · Circuits 1–7</p>
+      </div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-card-header">New Panel</div>
+      <div class="photo-body">
+        <div class="photo-img-wrap" id="imgWrap-NEW" onclick="openLightbox('NEW')">
+          <div class="photo-placeholder" id="imgPlaceholder-NEW"><div class="icon">🔲</div>No photo</div>
+          <img id="imgDisplay-NEW" style="display:none" alt="New Panel">
+        </div>
+        <label class="photo-upload-btn">Load from device<input type="file" accept="image/*" style="display:none" onchange="loadPhoto('NEW',this)"></label>
+        <button class="photo-remove-btn" id="removeBtn-NEW" style="display:none" onclick="removePhoto('NEW')">Remove</button>
+        <p class="photo-note">Combined panel · White stickers = new #s</p>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #ddd;">
+    <button class="btn btn-danger btn-sm" onclick="resetToken()">Reset GitHub Token</button>
+    <span style="font-size:0.7rem;color:#aaa;margin-left:10px">Use this if you get a new token</span>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<!-- Edit Modal -->
+<div class="overlay" id="editModal">
+  <div class="modal">
+    <h2 id="editTitle">Edit Circuit</h2>
+    <div>
+      <label>Primary Zone</label>
+      <input type="text" id="editArea" class="big" placeholder="e.g. Kitchen, Living Room">
+    </div>
+    <div class="field">
+      <label>Description / Subtitle</label>
+      <input type="text" id="editLabel" placeholder="e.g. Fridge · Pantry">
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <div class="status-pills">
+        <button class="status-pill" id="pill-confirmed"   onclick="setPill('confirmed')">✓ Confirmed</button>
+        <button class="status-pill" id="pill-unconfirmed" onclick="setPill('unconfirmed')">~ Identified</button>
+        <button class="status-pill" id="pill-unknown"     onclick="setPill('unknown')">? Unknown</button>
+      </div>
+      <input type="hidden" id="editStatus" value="unconfirmed">
+    </div>
+    <hr class="modal-divider">
+    <div class="field"><label class="dim">Old Circuit Reference</label><input type="text" id="editOldRef" placeholder="e.g. A-6 or B-27"></div>
+    <div class="field"><label class="dim">New Panel Position</label><input type="text" id="editNewPos" placeholder="e.g. 12 or 18/20"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <div style="flex:1"><label class="dim">Breaker Type</label><select id="editBreaker"><option value="single">Single — 120V</option><option value="double">Double — 240V</option><option value="tandem">Tandem</option></select></div>
+      <div style="width:80px"><label class="dim">Amps</label><input type="text" id="editAmps" placeholder="20"></div>
+    </div>
+    <div class="field"><label class="dim">Notes</label><textarea id="editNotes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Circuit Modal -->
+<div class="overlay" id="addModal">
+  <div class="modal">
+    <h2>Add Circuit</h2>
+    <div><label>Primary Zone</label><input type="text" id="addArea" class="big" placeholder="e.g. Kitchen"></div>
+    <div class="field"><label>Description / Subtitle</label><input type="text" id="addLabel" placeholder="e.g. Outlets, Lights"></div>
+    <div class="field">
+      <label>Status</label>
+      <div class="status-pills">
+        <button class="status-pill" id="add-pill-confirmed"   onclick="setAddPill('confirmed')">✓ Confirmed</button>
+        <button class="status-pill active-unconfirmed" id="add-pill-unconfirmed" onclick="setAddPill('unconfirmed')">~ Identified</button>
+        <button class="status-pill" id="add-pill-unknown"     onclick="setAddPill('unknown')">? Unknown</button>
+      </div>
+      <input type="hidden" id="addStatus" value="unconfirmed">
+    </div>
+    <hr class="modal-divider">
+    <div class="field"><label class="dim">New Panel Position</label><input type="text" id="addNewPos" placeholder="e.g. 32 or TBD"></div>
+    <div class="field"><label class="dim">Old Circuit Reference</label><input type="text" id="addOldRef" placeholder="e.g. A-9"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <div style="flex:1"><label class="dim">Breaker Type</label><select id="addBreaker"><option value="single">Single — 120V</option><option value="double">Double — 240V</option><option value="tandem">Tandem</option></select></div>
+      <div style="width:80px"><label class="dim">Amps</label><input type="text" id="addAmps" value="20"></div>
+    </div>
+    <div class="field"><label class="dim">Notes</label><textarea id="addNotes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewCircuit()">Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── GitHub config ────────────────────────────────────────────────────────────
+const GH_OWNER = 'jonathanproto';
+const GH_REPO  = 'panel-tracker';
+const GH_FILE  = 'data.json';
+const GH_API   = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`;
+const TS_KEY   = 'panel_ts';
+
+function getToken() { return localStorage.getItem('gh_pat'); }
+
+function setSyncBadge(state, label) {
+  const b = document.getElementById('syncBadge');
+  b.style.display = '';
+  b.className = 'sync-indicator sync-' + state;
+  b.textContent = label;
+}
+
+function setLoading(pct) {
+  document.getElementById('loadingBar').style.width = pct + '%';
+}
+
+// ─── Base64 helpers (UTF-8 safe) ──────────────────────────────────────────────
+function toB64(str) {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode(parseInt(p,16))));
+}
+function fromB64(b64) {
+  return decodeURIComponent(atob(b64.replace(/\n/g,'')).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+
+// ─── Token setup ──────────────────────────────────────────────────────────────
+async function setupToken() {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (!token) return;
+  document.getElementById('setupError').style.display = 'none';
+
+  // Verify token works
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`, {
+    headers: { 'Authorization': `token ${token}` }
+  });
+  if (!res.ok) {
+    document.getElementById('setupError').style.display = 'block';
+    return;
+  }
+  localStorage.setItem('gh_pat', token);
+  document.getElementById('setupOverlay').classList.remove('show');
+  await loadFromGitHub();
+  renderAll();
+}
+
+function resetToken() {
+  if (confirm('Reset your GitHub token? You'll need to enter it again.')) {
+    localStorage.removeItem('gh_pat');
+    localStorage.removeItem('gh_sha');
+    document.getElementById('setupOverlay').classList.add('show');
+  }
+}
+
+// ─── GitHub load / save ───────────────────────────────────────────────────────
+async function loadFromGitHub() {
+  const token = getToken(); if (!token) return;
+  setLoading(30); setSyncBadge('busy', '↓ Loading…');
+  try {
+    const res = await fetch(GH_API, {
+      headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    setLoading(70);
+    if (res.status === 404) {
+      // First run — create file with INITIAL data
+      circuits = JSON.parse(JSON.stringify(INITIAL));
+      await saveToGitHub(true);
+    } else if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('gh_sha', data.sha);
+      circuits = JSON.parse(fromB64(data.content));
+      const ts = localStorage.getItem(TS_KEY);
+      if (ts) document.getElementById('lastUpdated').textContent = ts;
+    } else {
+      throw new Error(res.status);
+    }
+    setLoading(100);
+    setSyncBadge('ok', '✓ Synced');
+    setTimeout(()=>setLoading(0), 600);
+  } catch(e) {
+    setLoading(0);
+    setSyncBadge('err', '✗ Offline');
+    // Fall back to any cached data
+    const cached = localStorage.getItem('panel_cache');
+    if (cached) circuits = JSON.parse(cached);
+    else circuits = JSON.parse(JSON.stringify(INITIAL));
+  }
+}
+
+async function saveToGitHub(isCreate = false) {
+  const token = getToken(); if (!token) return;
+  setSyncBadge('busy', '↑ Saving…');
+  const sha = localStorage.getItem('gh_sha');
+  const body = {
+    message: 'Update circuit data',
+    content: toB64(JSON.stringify(circuits, null, 2))
+  };
+  if (sha && !isCreate) body.sha = sha;
+
+  try {
+    const res = await fetch(GH_API, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    localStorage.setItem('gh_sha', data.content.sha);
+    const ts = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    localStorage.setItem(TS_KEY, ts);
+    document.getElementById('lastUpdated').textContent = ts;
+    // Cache for offline fallback
+    localStorage.setItem('panel_cache', JSON.stringify(circuits));
+    setSyncBadge('ok', '✓ Saved');
+  } catch(e) {
+    setSyncBadge('err', '✗ Save failed');
+    // Still cache locally
+    localStorage.setItem('panel_cache', JSON.stringify(circuits));
+  }
+}
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+const INITIAL = [
+  { id:'a7',  newPos:'2',     oldRef:'A-7',  source:'A', label:'Fridge / Pantry',          area:'Kitchen',       breaker:'single', amps:'20', status:'confirmed',   outlets:[], notes:'' },
+  { id:'a2',  newPos:'4',     oldRef:'A-2',  source:'A', label:'Kitchen Outlets',           area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a3',  newPos:'10',    oldRef:'A-3',  source:'A', label:'Disposal (DISP)',           area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a1',  newPos:'12',    oldRef:'A-1',  source:'A', label:'Kitchen Cubby / Dining',   area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a5',  newPos:'14',    oldRef:'A-5',  source:'A', label:'Front Door / Hallway',      area:'Hallway',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a17', newPos:'15',    oldRef:'A-17', source:'A', label:'Upper Bed 1',               area:'Upper Bedroom', breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a6',  newPos:'16',    oldRef:'A-6',  source:'A', label:'Furnace',                   area:'Utility',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a9',  newPos:'19',    oldRef:'A-9',  source:'A', label:'220V Pump',                 area:'Mechanical',    breaker:'double', amps:'40', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a8',  newPos:'21',    oldRef:'A-8',  source:'A', label:'Living Room',               area:'Living Room',   breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a18', newPos:'23',    oldRef:'A-18', source:'A', label:'Upper Bed 2',               area:'Upper Bedroom', breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a15', newPos:'24',    oldRef:'A-15', source:'A', label:'Solarium Plugs (1 of 2)',   area:'Solarium',      breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a11', newPos:'26',    oldRef:'A-11', source:'A', label:'Disposal',                  area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a14', newPos:'28',    oldRef:'A-14', source:'A', label:'Jacuzzi',                   area:'Bathroom',      breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a4',  newPos:'TBD',   oldRef:'A-4',  source:'A', label:'Unknown',                   area:'',              breaker:'single', amps:'20', status:'unknown',     outlets:[], notes:'' },
+  { id:'a10', newPos:'TBD',   oldRef:'A-10', source:'A', label:'220V Pump',                 area:'Mechanical',    breaker:'double', amps:'40', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a12', newPos:'TBD',   oldRef:'A-12', source:'A', label:'Kitchen Plug (R)',           area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a13', newPos:'TBD',   oldRef:'A-13', source:'A', label:'Kitchen Plug',               area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a16', newPos:'TBD',   oldRef:'A-16', source:'A', label:'Solarium Plugs (2 of 2)',   area:'Solarium',      breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a19', newPos:'TBD',   oldRef:'A-19', source:'A', label:'GF Plugs',                  area:'',              breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a20', newPos:'TBD',   oldRef:'A-20', source:'A', label:'GF Plugs',                  area:'',              breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a21', newPos:'TBD',   oldRef:'A-21', source:'A', label:'Sub Panel',                 area:'',              breaker:'double', amps:'?',  status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a22', newPos:'TBD',   oldRef:'A-22', source:'A', label:'Sub Panel',                 area:'',              breaker:'double', amps:'?',  status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a23', newPos:'TBD',   oldRef:'A-23', source:'A', label:'Dryer',                     area:'Utility',       breaker:'double', amps:'?',  status:'unconfirmed', outlets:[], notes:'' },
+  { id:'a24', newPos:'TBD',   oldRef:'A-24', source:'A', label:'Dryer',                     area:'Utility',       breaker:'double', amps:'?',  status:'unconfirmed', outlets:[], notes:'' },
+  { id:'u1',  newPos:'6',     oldRef:'?',    source:'?', label:'',                          area:'',              breaker:'double', amps:'?',  status:'unknown',     outlets:[], notes:'' },
+  { id:'u2',  newPos:'8',     oldRef:'?',    source:'?', label:'',                          area:'',              breaker:'double', amps:'?',  status:'unknown',     outlets:[], notes:'' },
+  { id:'u5',  newPos:'22',    oldRef:'?',    source:'?', label:'',                          area:'',              breaker:'single', amps:'?',  status:'unknown',     outlets:[], notes:'' },
+  { id:'u3',  newPos:'17',    oldRef:'?',    source:'?', label:'',                          area:'',              breaker:'single', amps:'?',  status:'unknown',     outlets:[], notes:'' },
+  { id:'u4',  newPos:'18/20', oldRef:'"45"', source:'?', label:'',                          area:'',              breaker:'double', amps:'40', status:'unknown',     outlets:[], notes:'' },
+  { id:'b27', newPos:'30',    oldRef:'B-27', source:'B', label:'Kitchen Lights',            area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b21', newPos:'TBD',   oldRef:'B-21', source:'B', label:'Family Room',              area:'Family Room',   breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b22', newPos:'TBD',   oldRef:'B-22', source:'B', label:'LR Hood',                  area:'',              breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b23', newPos:'TBD',   oldRef:'B-23', source:'B', label:'Stove / Cook Top',          area:'Kitchen',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b24', newPos:'TBD',   oldRef:'B-24', source:'B', label:'Spare',                    area:'',              breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b25', newPos:'TBD',   oldRef:'B-25', source:'B', label:'Plugs',                    area:'',              breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+  { id:'b26', newPos:'TBD',   oldRef:'B-26', source:'B', label:'Hot Water Heater',          area:'Utility',       breaker:'single', amps:'20', status:'unconfirmed', outlets:[], notes:'' },
+];
+
+const ICONS = { outlet:'🔌', switch:'💡', light:'🔆', appliance:'🏠', other:'⚙️' };
+let circuits = [];
+let editId = null;
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ['panel','list','photos'].forEach((n,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',n===name);
+    document.getElementById('tab-'+n).classList.toggle('active',n===name);
+  });
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const el = n => document.getElementById('stat'+n);
+  if(el('Total'))       el('Total').textContent       = circuits.length;
+  if(el('Confirmed'))   el('Confirmed').textContent   = circuits.filter(x=>x.status==='confirmed').length;
+  if(el('Unconfirmed')) el('Unconfirmed').textContent = circuits.filter(x=>x.status==='unconfirmed').length;
+  if(el('Unknown'))     el('Unknown').textContent     = circuits.filter(x=>x.status==='unknown').length;
+}
+
+// ─── Panel view ───────────────────────────────────────────────────────────────
+function buildPosMap() {
+  const map = {};
+  circuits.forEach(c => {
+    if (c.newPos==='TBD') return;
+    if (c.newPos.includes('/')) {
+      c.newPos.split('/').map(Number).forEach(p=>{ map[p]={...c,_doublePos:c.newPos.split('/').map(Number)}; });
+    } else {
+      map[parseInt(c.newPos)] = c;
+    }
+  });
+  return map;
+}
+
+function renderPanel() {
+  const grid = document.getElementById('panelGrid');
+  const posMap = buildPosMap();
+  const ROWS = 21;
+  const rendered = new Set();
+  let html = `<div style="grid-column:3;grid-row:1/${ROWS+1};background:#555;border-radius:2px;"></div>`;
+
+  for (let row = 1; row <= ROWS; row++) {
+    const lp = row*2-1, rp = row*2;
+    const lc = posMap[lp], rc = posMap[rp];
+    const lRef = lc ? h(lc.oldRef||'') : '';
+    const rRef = rc ? h(rc.oldRef||'') : '';
+    html += `<div class="pos-num${lc?' live':''}" style="grid-column:1;grid-row:${row}"><span class="pn-n">${lp}</span>${lRef&&lRef!=='?'?`<span class="pn-ref">${lRef}</span>`:''}</div>`;
+    html += buildCell(lp,'left',posMap,rendered,row);
+    html += `<div class="pos-num${rc?' live':''}" style="grid-column:5;grid-row:${row}"><span class="pn-n">${rp}</span>${rRef&&rRef!=='?'?`<span class="pn-ref">${rRef}</span>`:''}</div>`;
+    html += buildCell(rp,'right',posMap,rendered,row);
+  }
+  grid.innerHTML = html;
+}
+
+function buildCell(pos, side, posMap, rendered, row) {
+  const col = side==='left'?2:4;
+  const c = posMap[pos];
+  if (!c) {
+    return `<div class="breaker ${side} empty" style="grid-column:${col};grid-row:${row}"><div class="b-zone dim">Open</div></div>`;
+  }
+  if (c._doublePos) {
+    const parts = c._doublePos.sort((a,b)=>a-b);
+    const first = parts[0];
+    if (rendered.has(first)) return '';
+    rendered.add(first);
+    const r1 = Math.ceil(first/2), r2 = r1+1;
+    const cls = c.status==='confirmed'?'confirmed':c.status==='unknown'?'unknown':'unconfirmed';
+    return `<div class="breaker ${side} ${cls}" style="grid-column:${col};grid-row:${r1}/${r2+1};cursor:pointer" onclick="openEdit('${c.id}')">
+      <div class="b-zone${!c.area?' mys':''}">${c.area?h(c.area):'?'}</div>
+      ${c.label?`<div class="b-sub">${h(c.label)}</div>`:''}
+      <div class="b-sub v2">240V · Double pole</div>
+    </div>`;
+  }
+  const cls = c.status==='confirmed'?'confirmed':c.status==='unknown'?'unknown':'unconfirmed';
+  const locs = (c.outlets||[]).length;
+  return `<div class="breaker ${side} ${cls}" style="grid-column:${col};grid-row:${row}" onclick="openEdit('${c.id}')">
+    <div class="b-zone${!c.area?' mys':''}">${c.area?h(c.area):'?'}</div>
+    ${c.label?`<div class="b-sub">${h(c.label)}</div>`:''}
+    ${locs?`<div class="b-sub" style="color:#aaa">${locs}🔌</div>`:''}
+  </div>`;
+}
+
+// ─── List view ────────────────────────────────────────────────────────────────
+let openDetailId = null;
+function renderList() {
+  const aF  = document.getElementById('filterArea').value;
+  const stF = document.getElementById('filterStatus').value;
+  const q   = document.getElementById('searchBox').value.toLowerCase();
+  const rows = circuits
+    .filter(c=>{ if(aF&&c.area!==aF)return false; if(stF&&c.status!==stF)return false; if(q&&!`${c.newPos} ${c.oldRef} ${c.label} ${c.area}`.toLowerCase().includes(q))return false; return true; })
+    .sort((a,b)=>{ const n=p=>(p==='TBD')?9999:(parseInt(String(p))||9999); return n(a.newPos)-n(b.newPos); });
+
+  document.getElementById('circuitTable').innerHTML = rows.map(c=>{
+    const rc = c.status==='unknown'?'row-unknown':c.newPos==='TBD'?'row-tbd':'';
+    const posBadge = `<span class="pos-badge ${c.breaker==='double'?'double':''} ${c.newPos==='TBD'?'tbd':''}">${h(c.newPos)}</span>`;
+    const stBadge  = c.status==='confirmed'?`<span class="badge badge-confirmed">✓</span>`:c.status==='unconfirmed'?`<span class="badge badge-unconfirmed">~</span>`:`<span class="badge badge-needscheck">?</span>`;
+    const zoneEl   = c.area?`<strong>${h(c.area)}</strong>`:`<span class="empty-val" onclick="event.stopPropagation();openEdit('${c.id}')">+ zone</span>`;
+    const labelEl  = c.label?`<span style="color:#555;font-size:.76rem">${h(c.label)}</span>`:`<span class="empty-val">—</span>`;
+    const typeEl   = c.breaker==='double'?'240V':'120V';
+    const locs = c.outlets||[];
+    const locBadge = locs.length>0?`<span class="loc-count">${locs.length}</span>`:`<span class="loc-count empty">—</span>`;
+    const locItems = locs.length===0?`<div class="loc-empty">No locations logged yet.</div>`:locs.map((o,i)=>`<div class="loc-item"><span class="loc-icon">${ICONS[o.type]||'⚙️'}</span><span class="loc-desc">${h(o.location)}</span><button class="loc-del" onclick="event.stopPropagation();removeOutlet('${c.id}',${i})">✕</button></div>`).join('');
+    const notesBlock = c.notes?`<div class="detail-notes">${h(c.notes)}</div>`:'';
+    const detailRow = `<tr class="detail-row" id="detail-${c.id}" style="display:none"><td colspan="8"><div class="detail-panel">${notesBlock}<div class="loc-list" id="loclist-${c.id}">${locItems}</div><div class="quick-add"><select class="qa-sel" id="qa-type-${c.id}"><option value="outlet">🔌 Outlet</option><option value="switch">💡 Switch</option><option value="light">🔆 Fixture</option><option value="appliance">🏠 Appliance</option><option value="other">⚙️ Other</option></select><input class="qa-input" id="qa-loc-${c.id}" type="text" placeholder="Location…" onkeydown="if(event.key==='Enter')addOutletInline('${c.id}')"><button class="btn btn-primary btn-sm" onclick="addOutletInline('${c.id}')">+ Add</button></div></div></td></tr>`;
+    return `<tr class="${rc} circuit-row" onclick="toggleDetail('${c.id}')"><td>${posBadge}</td><td>${zoneEl}</td><td>${labelEl}</td><td style="font-size:.72rem;color:#aaa">${typeEl}</td><td>${stBadge}</td><td>${locBadge}</td><td style="font-size:.68rem;color:#bbb;font-family:monospace">${h(c.oldRef)}</td><td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdit('${c.id}')">Edit</button></td></tr>${detailRow}`;
+  }).join('');
+
+  const sel = document.getElementById('filterArea'), cur = sel.value;
+  const areas = [...new Set(circuits.map(c=>c.area).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Areas</option>'+areas.map(a=>`<option value="${a}"${a===cur?' selected':''}>${h(a)}</option>`).join('');
+  updateStats();
+}
+
+function toggleDetail(id) {
+  const row = document.getElementById('detail-'+id); if(!row) return;
+  const isOpen = row.style.display!=='none';
+  document.querySelectorAll('.detail-row').forEach(r=>r.style.display='none');
+  document.querySelectorAll('.circuit-row.expanded').forEach(r=>r.classList.remove('expanded'));
+  openDetailId = null;
+  if(!isOpen){ row.style.display=''; const prev=row.previousElementSibling; if(prev)prev.classList.add('expanded'); openDetailId=id; setTimeout(()=>{const i=document.getElementById('qa-loc-'+id);if(i)i.focus();},60); }
+}
+
+function addOutletInline(id) {
+  const locEl=document.getElementById('qa-loc-'+id),typeEl=document.getElementById('qa-type-'+id);
+  if(!locEl||!typeEl)return;
+  const loc=locEl.value.trim(); if(!loc){locEl.style.borderColor='#e53e3e';locEl.focus();return;}
+  locEl.style.borderColor='';
+  const c=circuits.find(x=>x.id===id); if(!c)return;
+  if(!c.outlets)c.outlets=[];
+  c.outlets.push({type:typeEl.value,location:loc,notes:''});
+  locEl.value=''; saveToGitHub();
+  const listEl=document.getElementById('loclist-'+id);
+  if(listEl)listEl.innerHTML=c.outlets.map((o,i)=>`<div class="loc-item"><span class="loc-icon">${ICONS[o.type]||'⚙️'}</span><span class="loc-desc">${h(o.location)}</span><button class="loc-del" onclick="event.stopPropagation();removeOutlet('${id}',${i})">✕</button></div>`).join('');
+  updateStats(); setTimeout(()=>locEl.focus(),30);
+}
+
+function removeOutlet(cid,idx) {
+  const c=circuits.find(x=>x.id===cid); if(!c||!c.outlets)return;
+  c.outlets.splice(idx,1); saveToGitHub();
+  const listEl=document.getElementById('loclist-'+cid);
+  if(listEl)listEl.innerHTML=c.outlets.length===0?'<div class="loc-empty">No locations logged yet.</div>':c.outlets.map((o,i)=>`<div class="loc-item"><span class="loc-icon">${ICONS[o.type]||'⚙️'}</span><span class="loc-desc">${h(o.location)}</span><button class="loc-del" onclick="event.stopPropagation();removeOutlet('${cid}',${i})">✕</button></div>`).join('');
+  updateStats();
+}
+
+// ─── Status pills ─────────────────────────────────────────────────────────────
+function setPill(val) {
+  document.getElementById('editStatus').value=val;
+  ['confirmed','unconfirmed','unknown'].forEach(v=>{ document.getElementById('pill-'+v).className='status-pill'+(v===val?' active-'+v:''); });
+}
+function setAddPill(val) {
+  document.getElementById('addStatus').value=val;
+  ['confirmed','unconfirmed','unknown'].forEach(v=>{ document.getElementById('add-pill-'+v).className='status-pill'+(v===val?' active-'+v:''); });
+}
+
+// ─── Edit ─────────────────────────────────────────────────────────────────────
+function openEdit(id) {
+  const c=circuits.find(x=>x.id===id); if(!c)return;
+  editId=id;
+  document.getElementById('editTitle').textContent=`Position ${c.newPos}`;
+  document.getElementById('editArea').value=c.area||'';
+  document.getElementById('editLabel').value=c.label||'';
+  document.getElementById('editOldRef').value=c.oldRef||'';
+  document.getElementById('editNewPos').value=c.newPos||'';
+  document.getElementById('editBreaker').value=c.breaker||'single';
+  document.getElementById('editAmps').value=c.amps||'';
+  document.getElementById('editNotes').value=c.notes||'';
+  setPill(c.status||'unconfirmed');
+  document.getElementById('editModal').classList.add('show');
+}
+function saveEdit() {
+  const c=circuits.find(x=>x.id===editId); if(!c)return;
+  c.area=document.getElementById('editArea').value.trim();
+  c.label=document.getElementById('editLabel').value.trim();
+  c.oldRef=document.getElementById('editOldRef').value.trim();
+  c.newPos=document.getElementById('editNewPos').value.trim();
+  c.breaker=document.getElementById('editBreaker').value;
+  c.amps=document.getElementById('editAmps').value.trim();
+  c.status=document.getElementById('editStatus').value;
+  c.notes=document.getElementById('editNotes').value.trim();
+  saveToGitHub(); renderAll(); closeModal('editModal');
+}
+
+// ─── Add ──────────────────────────────────────────────────────────────────────
+function openAddCircuit() {
+  ['addArea','addLabel','addNewPos','addOldRef','addNotes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('addAmps').value='20';
+  document.getElementById('addBreaker').value='single';
+  setAddPill('unconfirmed');
+  document.getElementById('addModal').classList.add('show');
+}
+function saveNewCircuit() {
+  circuits.push({ id:'c'+Date.now(), newPos:document.getElementById('addNewPos').value.trim()||'TBD', oldRef:document.getElementById('addOldRef').value.trim()||'?', source:'?', label:document.getElementById('addLabel').value.trim(), area:document.getElementById('addArea').value.trim(), breaker:document.getElementById('addBreaker').value, amps:document.getElementById('addAmps').value.trim(), status:document.getElementById('addStatus').value, outlets:[], notes:document.getElementById('addNotes').value.trim() });
+  saveToGitHub(); renderAll(); closeModal('addModal');
+}
+
+// ─── Photos ───────────────────────────────────────────────────────────────────
+const PHOTO_STORE = 'epanel_photos_v1';
+function loadPhoto(key,input) {
+  const file=input.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{ const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const MAX=1200,scale=Math.min(1,MAX/Math.max(img.width,img.height)); canvas.width=Math.round(img.width*scale); canvas.height=Math.round(img.height*scale); canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height); const data=canvas.toDataURL('image/jpeg',0.72); try{ const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); photos[key]=data; localStorage.setItem(PHOTO_STORE,JSON.stringify(photos)); }catch(err){ alert('Photo too large.'); return; } showPhoto(key,data); }; img.src=e.target.result; };
+  reader.readAsDataURL(file);
+}
+function showPhoto(key,dataUrl) { document.getElementById('imgDisplay-'+key).src=dataUrl; document.getElementById('imgDisplay-'+key).style.display='block'; document.getElementById('imgPlaceholder-'+key).style.display='none'; document.getElementById('removeBtn-'+key).style.display='block'; }
+function removePhoto(key) { const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); delete photos[key]; localStorage.setItem(PHOTO_STORE,JSON.stringify(photos)); document.getElementById('imgDisplay-'+key).style.display='none'; document.getElementById('imgPlaceholder-'+key).style.display='flex'; document.getElementById('imgDisplay-'+key).src=''; document.getElementById('removeBtn-'+key).style.display='none'; }
+function loadSavedPhotos() { try{ const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); ['A','B','NEW'].forEach(k=>{ if(photos[k])showPhoto(k,photos[k]); }); }catch(e){} }
+function openLightbox(key) { const img=document.getElementById('imgDisplay-'+key); if(!img||img.style.display==='none')return; document.getElementById('lightboxImg').src=img.src; document.getElementById('lightbox').classList.add('open'); }
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function h(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderAll(){ renderPanel(); renderList(); updateStats(); }
+
+document.querySelectorAll('.overlay').forEach(el=>{
+  el.addEventListener('click',e=>{ if(e.target===el)el.classList.remove('show'); });
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ document.querySelectorAll('.overlay.show').forEach(el=>el.classList.remove('show')); closeLightbox(); }
+});
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+(async()=>{
+  if (!getToken()) {
+    document.getElementById('setupOverlay').classList.add('show');
+    return;
+  }
+  await loadFromGitHub();
+  renderAll();
+  loadSavedPhotos();
+})();
+</script>
+</body>
+</html>
