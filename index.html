@@ -12,8 +12,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Panel TrackerZ">
-<title>Panel TrackerZ</title>
+<meta name="apple-mobile-web-app-title" content="Panel Tracker">
+<title>Panel Tracker</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 
@@ -264,7 +264,7 @@ tr.row-tbd td { background: #fafafa; }
 <!-- Token setup screen -->
 <div id="setupOverlay">
   <div class="setup-box">
-    <h2>Panel TrackerZ</h2>
+    <h2>Panel Tracker</h2>
     <p class="setup-sub">Enter your GitHub access token to sync your circuit data across devices. This is stored only on this device.</p>
     <label>GitHub Access Token</label>
     <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
@@ -274,7 +274,7 @@ tr.row-tbd td { background: #fafafa; }
 </div>
 
 <div class="topbar">
-  <h1>Panel TrackerZ</h1>
+  <h1>Panel Tracker</h1>
   <span class="main-tag">Main · 100A</span>
   <span class="ts">Updated: <span id="lastUpdated">–</span></span>
   <span class="sync-indicator sync-ok" id="syncBadge" style="display:none">✓ Synced</span>
@@ -497,6 +497,7 @@ async function setupToken() {
   document.getElementById('setupOverlay').classList.remove('show');
   await loadFromGitHub();
   renderAll();
+  loadSavedPhotos();
 }
 
 function resetToken() {
@@ -815,16 +816,79 @@ function saveNewCircuit() {
 }
 
 // ─── Photos ───────────────────────────────────────────────────────────────────
+// Photos sync to the repo as photos/<key>.jpg so every device sees them.
+// localStorage is only an offline cache. Photos saved by older versions live
+// only in that cache; they get uploaded the first time that device opens the app.
 const PHOTO_STORE = 'epanel_photos_v1';
+const PHOTO_SYNCED = 'epanel_photos_synced_v1';
+const PHOTO_KEYS = ['A','B','NEW'];
+const photoSha = {};
+function photoApi(key) { return `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/photos/${key}.jpg`; }
+function ghHeaders() { return { 'Authorization': `token ${getToken()}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' }; }
+function readStore(k) { try { return JSON.parse(localStorage.getItem(k)||'{}'); } catch(e) { return {}; } }
+function writeStore(k,v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+function cachePhoto(key,data) { const p=readStore(PHOTO_STORE); if(data) p[key]=data; else delete p[key]; writeStore(PHOTO_STORE,p); }
+function markSynced(key,on) { const s=readStore(PHOTO_SYNCED); if(on) s[key]=1; else delete s[key]; writeStore(PHOTO_SYNCED,s); }
+
+async function uploadPhoto(key,dataUrl) {
+  const body = { message: `Update photo ${key}`, content: dataUrl.split(',')[1] };
+  if (photoSha[key]) body.sha = photoSha[key];
+  const res = await fetch(photoApi(key), { method:'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(res.status);
+  photoSha[key] = (await res.json()).content.sha;
+  markSynced(key,true);
+}
+
 function loadPhoto(key,input) {
   const file=input.files[0]; if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{ const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const MAX=1200,scale=Math.min(1,MAX/Math.max(img.width,img.height)); canvas.width=Math.round(img.width*scale); canvas.height=Math.round(img.height*scale); canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height); const data=canvas.toDataURL('image/jpeg',0.72); try{ const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); photos[key]=data; localStorage.setItem(PHOTO_STORE,JSON.stringify(photos)); }catch(err){ alert('Photo too large.'); return; } showPhoto(key,data); }; img.src=e.target.result; };
+  reader.onload=e=>{ const img=new Image(); img.onload=async()=>{
+    const canvas=document.createElement('canvas'); const MAX=1200,scale=Math.min(1,MAX/Math.max(img.width,img.height));
+    canvas.width=Math.round(img.width*scale); canvas.height=Math.round(img.height*scale);
+    canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+    const data=canvas.toDataURL('image/jpeg',0.72);
+    showPhoto(key,data); cachePhoto(key,data);
+    setSyncBadge('busy','↑ Saving photo…');
+    try { await uploadPhoto(key,data); setSyncBadge('ok','✓ Saved'); }
+    catch(err) { setSyncBadge('err','✗ Photo not synced'); }
+  }; img.src=e.target.result; };
   reader.readAsDataURL(file);
+  input.value='';
 }
 function showPhoto(key,dataUrl) { document.getElementById('imgDisplay-'+key).src=dataUrl; document.getElementById('imgDisplay-'+key).style.display='block'; document.getElementById('imgPlaceholder-'+key).style.display='none'; document.getElementById('removeBtn-'+key).style.display='block'; }
-function removePhoto(key) { const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); delete photos[key]; localStorage.setItem(PHOTO_STORE,JSON.stringify(photos)); document.getElementById('imgDisplay-'+key).style.display='none'; document.getElementById('imgPlaceholder-'+key).style.display='flex'; document.getElementById('imgDisplay-'+key).src=''; document.getElementById('removeBtn-'+key).style.display='none'; }
-function loadSavedPhotos() { try{ const photos=JSON.parse(localStorage.getItem(PHOTO_STORE)||'{}'); ['A','B','NEW'].forEach(k=>{ if(photos[k])showPhoto(k,photos[k]); }); }catch(e){} }
+function hidePhoto(key) { document.getElementById('imgDisplay-'+key).style.display='none'; document.getElementById('imgPlaceholder-'+key).style.display='flex'; document.getElementById('imgDisplay-'+key).src=''; document.getElementById('removeBtn-'+key).style.display='none'; }
+async function removePhoto(key) {
+  if (!confirm('Remove this photo from all devices?')) return;
+  hidePhoto(key); cachePhoto(key,null);
+  if (!photoSha[key]) { markSynced(key,false); return; }
+  setSyncBadge('busy','↑ Removing photo…');
+  try {
+    const res = await fetch(photoApi(key), { method:'DELETE', headers: ghHeaders(), body: JSON.stringify({ message:`Remove photo ${key}`, sha: photoSha[key] }) });
+    if (!res.ok && res.status!==404) throw new Error(res.status);
+    delete photoSha[key]; markSynced(key,false);
+    setSyncBadge('ok','✓ Saved');
+  } catch(e) { setSyncBadge('err','✗ Remove failed'); }
+}
+async function loadSavedPhotos() {
+  const cached = readStore(PHOTO_STORE);
+  PHOTO_KEYS.forEach(k=>{ if(cached[k]) showPhoto(k,cached[k]); });
+  if (!getToken()) return;
+  for (const k of PHOTO_KEYS) {
+    try {
+      const res = await fetch(photoApi(k), { headers: ghHeaders() });
+      if (res.ok) {
+        const d = await res.json();
+        photoSha[k] = d.sha;
+        const url = 'data:image/jpeg;base64,' + d.content.replace(/\n/g,'');
+        showPhoto(k,url); cachePhoto(k,url); markSynced(k,true);
+      } else if (res.status === 404) {
+        const synced = readStore(PHOTO_SYNCED);
+        if (cached[k] && !synced[k]) await uploadPhoto(k,cached[k]);   // legacy local-only photo → push it up
+        else if (cached[k]) { hidePhoto(k); cachePhoto(k,null); markSynced(k,false); } // removed on another device
+      }
+    } catch(e) { /* offline: keep cached copy */ }
+  }
+}
 function openLightbox(key) { const img=document.getElementById('imgDisplay-'+key); if(!img||img.style.display==='none')return; document.getElementById('lightboxImg').src=img.src; document.getElementById('lightbox').classList.add('open'); }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 
