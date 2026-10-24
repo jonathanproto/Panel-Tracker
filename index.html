@@ -500,7 +500,7 @@ async function setupToken() {
 }
 
 function resetToken() {
-  if (confirm('Reset your GitHub token? You'll need to enter it again.')) {
+  if (confirm("Reset your GitHub token? You'll need to enter it again.")) {
     localStorage.removeItem('gh_pat');
     localStorage.removeItem('gh_sha');
     document.getElementById('setupOverlay').classList.add('show');
