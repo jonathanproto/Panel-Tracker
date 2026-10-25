@@ -56,13 +56,13 @@
     "newPos": "16",
     "oldRef": "A-5",
     "source": "A",
-    "label": "Front Door / Hallway",
+    "label": "Powder room",
     "area": "Hallway",
     "breaker": "single",
     "amps": "15",
     "status": "unconfirmed",
     "outlets": [],
-    "notes": ""
+    "notes": "Powder room. Doorbell"
   },
   {
     "id": "a17",
@@ -452,7 +452,7 @@
     "amps": "15",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   },
   {
     "id": "u7",
@@ -465,7 +465,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   },
   {
     "id": "u8",
@@ -478,7 +478,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   },
   {
     "id": "u9",
@@ -491,7 +491,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   },
   {
     "id": "u10",
@@ -504,7 +504,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   },
   {
     "id": "u11",
@@ -517,6 +517,6 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape \u2014 verified from Oct 25 photo"
+    "notes": "No tape — verified from Oct 25 photo"
   }
 ]
