@@ -322,7 +322,7 @@
     "amps": "30",
     "status": "unknown",
     "outlets": [],
-    "notes": ""
+    "notes": "30A double pole \u00b7 no tape"
   },
   {
     "id": "u3",
@@ -340,7 +340,7 @@
   {
     "id": "u4",
     "newPos": "18/20",
-    "oldRef": "\"45\"",
+    "oldRef": "45",
     "source": "?",
     "label": "",
     "area": "",
@@ -348,7 +348,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": ""
+    "notes": "20A double pole \u00b7 tape \"45\""
   },
   {
     "id": "b27",
@@ -452,7 +452,7 @@
     "amps": "15",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   },
   {
     "id": "u7",
@@ -465,7 +465,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   },
   {
     "id": "u8",
@@ -478,7 +478,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   },
   {
     "id": "u9",
@@ -491,7 +491,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   },
   {
     "id": "u10",
@@ -504,7 +504,7 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   },
   {
     "id": "u11",
@@ -517,6 +517,6 @@
     "amps": "20",
     "status": "unknown",
     "outlets": [],
-    "notes": "No tape — verified from Oct 25 photo"
+    "notes": "No tape \u2014 verified from Oct 25 photo"
   }
 ]
