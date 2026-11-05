@@ -135,12 +135,12 @@
     "oldRef": "A-15",
     "source": "A",
     "label": "Solarium Plugs (1 of 2)",
-    "area": "Solarium",
+    "area": "Entry hallway",
     "breaker": "single",
     "amps": "15",
     "status": "unconfirmed",
     "outlets": [],
-    "notes": ""
+    "notes": "Entry hallway lights,"
   },
   {
     "id": "a11",
