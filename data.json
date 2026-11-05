@@ -147,11 +147,11 @@
     "newPos": "26",
     "oldRef": "A-11",
     "source": "A",
-    "label": "Disposal",
+    "label": "",
     "area": "Kitchen",
     "breaker": "single",
     "amps": "20",
-    "status": "unconfirmed",
+    "status": "unknown",
     "outlets": [],
     "notes": ""
   },
