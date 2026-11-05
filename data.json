@@ -151,7 +151,7 @@
     "area": "Kitchen",
     "breaker": "single",
     "amps": "20",
-    "status": "unknown",
+    "status": "unconfirmed",
     "outlets": [],
     "notes": ""
   },
