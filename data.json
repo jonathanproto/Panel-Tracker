@@ -160,13 +160,13 @@
     "newPos": "24",
     "oldRef": "A-14",
     "source": "A",
-    "label": "Jacuzzi",
-    "area": "Bathroom",
+    "label": "",
+    "area": "Primary bathroom",
     "breaker": "single",
     "amps": "15",
     "status": "unconfirmed",
     "outlets": [],
-    "notes": ""
+    "notes": "All the lights"
   },
   {
     "id": "a4",
